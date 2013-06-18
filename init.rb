@@ -5,4 +5,4 @@
 # this file will be run everytime the mortar command is called. A large init.rb file will
 # cause the entire Mortar CLI tool to slow down.
 #
-require "bacon-bits/mortar/command/bacon-bits"
+require "baconbits/mortar/command/bacon-bits"

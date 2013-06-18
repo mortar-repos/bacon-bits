@@ -2,7 +2,7 @@ require "fileutils"
 require "mortar/plugin"
 require "mortar/command"
 require "mortar/command/base"
-require "bacon-bits/mortar/baconbits/lib"
+require "baconbits/mortar/baconbits/lib"
 
 # Mortar's library of reusable pigscripts and macros.
 # 
@@ -89,14 +89,12 @@ class Mortar::Command::BaconBits < Mortar::Command::Base
   #
   def use
     Mortar::BaconBits::Lib.ensure_dir_exists "vendor"
-    Mortar::BaconBits::Lib.ensure_dir_exists "vendor/controlscripts"
-    Mortar::BaconBits::Lib.ensure_dir_exists "vendor/pigscripts"
-    Mortar::BaconBits::Lib.ensure_dir_exists "vendor/macros"
+    Mortar::BaconBits::Lib.ensure_dir_exists "vendor/baconbits"
 
     bacon_bits_dir = Mortar::BaconBits::Lib.install_dir()
-    FileUtils.cp_r("#{bacon_bits_dir}/controlscripts", "vendor")
-    FileUtils.cp_r("#{bacon_bits_dir}/pigscripts", "vendor")
-    FileUtils.cp_r("#{bacon_bits_dir}/macros", "vendor")
+    FileUtils.cp_r("#{bacon_bits_dir}/controlscripts", "vendor/baconbits")
+    FileUtils.cp_r("#{bacon_bits_dir}/pigscripts", "vendor/baconbits")
+    FileUtils.cp_r("#{bacon_bits_dir}/macros", "vendor/baconbits")
   end
 end
 

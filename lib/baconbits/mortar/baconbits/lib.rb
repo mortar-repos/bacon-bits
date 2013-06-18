@@ -14,7 +14,7 @@ module Mortar
       end
 
       def self.list_controlscripts()
-        Dir.glob("#{install_dir()}/controlscripts/*").map { |p| File.basename(p) }
+        Dir.glob("#{install_dir()}/controlscripts/*").map { |p| File.basename(p) }.select { |f| f != "__init__.py" }
       end
 
       def self.run_in_install_dir(&block)
