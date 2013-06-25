@@ -1,3 +1,8 @@
+REGISTER '../vendor/baconbits/udfs/java/datafu-0.0.10.jar';
+DEFINE EnumerateFromOne datafu.pig.bags.Enumerate('1');
+
+----------------------------------------------------------------------------------------------------
+
 --
 -- Matrix-scalar operations
 --
@@ -90,11 +95,39 @@ RETURNS normalized {
                             row, col, val / total AS val;
 };
 
+DEFINE Matrix__TrimRows(mat, order_direction, max_elems_per_row)
+returns trimmed {
+    $trimmed        =   FOREACH (GROUP $mat BY row) {
+                            ordered = ORDER $mat BY val $order_direction;
+                            top     = LIMIT ordered $max_elems_per_row;
+                            GENERATE FLATTEN(top) AS (row, col, val);
+                        }
+};
+
 ----------------------------------------------------------------------------------------------------
 
 --
--- Matrix visualization utilities
+-- Other matrix utilities
 --
+
+DEFINE Matrix__NamesToIds(mat)
+RETURNS mat_with_ids, id_map {
+    row_names_dups  =   FOREACH $mat GENERATE row;
+    col_names_dups  =   FOREACH $mat GENERATE col;
+    row_names       =   DISTINCT row_ids_dups;
+    col_names       =   DISTINCT col_ids_dups;
+    all_names       =   UNION row_ids, col_ids;
+
+    enum            =   FOREACH (GROUP all_names ALL) GENERATE
+                            FLATTEN(EnumerateFromOne(all_names))
+                            AS (name, id);
+    $id_map         =   FORAECH enum GENERATE id, name;
+
+    join_1          =   FOREACH (JOIN $id_map BY name, $mat BY row) GENERATE
+                            id AS row, col AS col, val AS val;
+    $mat_with_ids   =   FOREACH (JOIN $id_map BY name, $mat BY col) GENERATE
+                            row AS row, id AS col, val AS val;
+};
 
 DEFINE Matrix__IdsToNames(mat, id_map)
 RETURNS mat_with_names {

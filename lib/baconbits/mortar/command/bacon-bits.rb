@@ -95,6 +95,7 @@ class Mortar::Command::BaconBits < Mortar::Command::Base
     FileUtils.cp_r("#{bacon_bits_dir}/controlscripts", "vendor/baconbits")
     FileUtils.cp_r("#{bacon_bits_dir}/pigscripts", "vendor/baconbits")
     FileUtils.cp_r("#{bacon_bits_dir}/macros", "vendor/baconbits")
+    FileUtils.cp_r("#{bacon_bits_dir}/udfs", "vendor/baconbits")
   end
 end
 

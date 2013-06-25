@@ -1,6 +1,6 @@
-REGISTER 's3n://mortar-prod-sandbox/jpacker/jar/datafu-0.0.9.jar';
-REGISTER '../udfs/python/nlp.py' USING streaming_python AS nlp_python_udfs;
-REGISTER '../udfs/jython/nlp.py' USING jython AS nlp_jython_udfs;
+REGISTER '../vendor/baconbits/udfs/java/datafu-0.0.10.jar';
+REGISTER '../vendor/baconbits/udfs/python/nlp.py' USING streaming_python AS nlp_python_udfs;
+REGISTER '../vendor/baconbits/udfs/jython/nlp.py' USING jython AS nlp_jython_udfs;
 
 DEFINE EnumerateFromOne datafu.pig.bags.Enumerate('1');
 

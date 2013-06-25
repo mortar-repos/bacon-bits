@@ -1,4 +1,4 @@
-REGISTER '../udfs/jython/utils.py' USING jython AS ml_jython_utils;
+REGISTER '../vendor/baconbits/udfs/jython/utils.py' USING jython AS ml_jython_utils;
 
 DEFINE ML__CosineSimilarityMatrix(features)
 RETURNS cosine_mat {
