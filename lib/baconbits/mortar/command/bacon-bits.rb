@@ -77,7 +77,7 @@ class Mortar::Command::BaconBits < Mortar::Command::Base
     # reconstructing command line args from options hash
     # there's probably a better way to do this
     args = [script_name] + options.flat_map do |k, v|
-      v.kind_of?(Array) ? v.flat_map { |e| ["--" + k.to_s, e.to_s]  } : ["--" + k.to_s, v.to_s]
+      v.kind_of?(Array) ? v.flat_map { |e| ["--" + k.to_s.sub("_", "-"), e.to_s]  } : ["--" + k.to_s.sub("_", "-"), v.to_s]
     end
 
     Mortar::BaconBits::Lib.run_command("local:run", args)
@@ -92,8 +92,6 @@ class Mortar::Command::BaconBits < Mortar::Command::Base
     Mortar::BaconBits::Lib.ensure_dir_exists "vendor/baconbits"
 
     bacon_bits_dir = Mortar::BaconBits::Lib.install_dir()
-    FileUtils.cp_r("#{bacon_bits_dir}/controlscripts", "vendor/baconbits")
-    FileUtils.cp_r("#{bacon_bits_dir}/pigscripts", "vendor/baconbits")
     FileUtils.cp_r("#{bacon_bits_dir}/macros", "vendor/baconbits")
     FileUtils.cp_r("#{bacon_bits_dir}/udfs", "vendor/baconbits")
   end

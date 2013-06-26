@@ -1,4 +1,4 @@
-REGISTER '../vendor/baconbits/udfs/java/datafu-0.0.10.jar';
+REGISTER 'datafu-0.0.10.jar';
 DEFINE EnumerateFromOne datafu.pig.bags.Enumerate('1');
 
 ----------------------------------------------------------------------------------------------------
@@ -27,11 +27,10 @@ RETURNS out {
 
 DEFINE Matrix__Sum(A, B)
 RETURNS out {
-    pairs   =   JOIN $A BY (row, col) FULL OUTER, $B BY (row, col);
-    $out    =   FOREACH pairs GENERATE 
-                    (A::row is null? B::row : A::row) AS row, 
-                    (A::col is null? B::col : A::col) AS col, 
-                    (A::val is null? 0.0 : A::val) + (B::val is null? 0.0 : B::val) AS val;
+    both    =   UNION A, B;
+    $out    =   FOREACH (GROUP both BY (row, col)) GENERATE 
+                    FLATTEN(group) AS (row, col),
+                    SUM(both.val) AS val;
 };
 
 DEFINE Matrix__Product(A, B)

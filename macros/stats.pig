@@ -1,4 +1,4 @@
-REGISTER '../vendor/baconbits/udfs/java/datafu-0.0.10.jar';
+REGISTER 'datafu-0.0.10.jar';
 
 DEFINE VAR datafu.pig.stats.VAR();
 DEFINE QUANTILES datafu.pig.stats.StreamingQuantile('11');

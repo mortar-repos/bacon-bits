@@ -9,8 +9,7 @@ These following examples assume you have installed Bacon Bits into your project,
 First, process your data into the standard matrix/graph schema `{row: chararray, col: chararray, val: double}`. Then, use the macro `Matrix__NamesToIds`:
 
     IMPORT '../vendor/macros/matrix.pig';
-    -- load and process your data into {row, col, val}
-    -- then:
+    -- load and process your data into {row, col, val}, then use:
     matrix_with_ids, id_to_name_map = Matrix__NamesToIds($my_data);
 
 ## Returning From Integer Ids To Names

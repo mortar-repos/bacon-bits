@@ -1,5 +1,5 @@
-IMPORT '../vendor/baconbits/macros/matrix.pig';
-IMPORT '../vendor/baconbits/macros/graph.pig';
+IMPORT 'matrix.pig';
+IMPORT 'graph.pig';
 
 ----------------------------------------------------------------------------------------------------
 

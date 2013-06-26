@@ -14,11 +14,20 @@ If your graph uses string ids instead of integers, see `docs/integer_ids.md` for
 
 First, make a parameter file with the following parameters:
 
-    GRAPH=/a/path         # graph file (can be a glob)
-    SEED_VERTICES=/a/path # seed vertex list file
-    TMP_DIR=/a/path       # tmp dir for intermediate output. will be deleted upon completion.
-    OUTPUT_PATH=/a/path   # dir to store output into
-    NEIGHBORHOOD_SIZE=3   # how many steps to go out from the seed vertices
+    # graph file (can be a glob)
+    GRAPH=/a/path
+
+    # seed vertex list file
+    SEED_VERTICES=/a/path
+
+    # tmp dir for intermediate output. will be deleted upon completion.
+    TMP_DIR=/a/path
+
+    # dir to store output into
+    OUTPUT_PATH=/a/path
+
+    # how many steps to go out from the seed vertices
+    NEIGHBORHOOD_SIZE=3
 
 To run on your local machine:
 
