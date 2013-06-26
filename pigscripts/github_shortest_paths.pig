@@ -43,17 +43,19 @@ graph           =   FOREACH graph GENERATE row, col, 1.0 / val AS val;
 
 graph, vertices =   Graph__AddSelfLoops(graph);
 squared         =   Matrix__MinPlusSquared(graph);
-cubed           =   Matrix__MinPlusProduct(graph, squared);
-valid_paths     =   FILTER cubed BY row != col;
+squared_trimmed =   Matrix__TrimRows(squared, 'ASC', $NEIGHBORHOOD_SIZE);
+cubed           =   Matrix__MinPlusProduct(squared_trimmed, graph);
+cubed_trimmed   =   Matrix__TrimRows(cubed, 'ASC', $NEIGHBORHOOD_SIZE);
+valid_paths     =   FILTER cubed_trimmed BY row != col;
 
 ----------------------------------------------------------------------------------------------------
 
 -- Join the Shortest Path neighborhoods to a map of repo ids to repo names,
 -- so we can get interpretable results
 
-with_names      =   Matrix__IdsToNames(walk_results, repo_ids);
+with_names      =   Matrix__IdsToNames(valid_paths, repo_ids);
 neighborhoods   =   FOREACH (GROUP with_names BY row) {
-                        sorted = ORDER with_names BY val DESC;
+                        sorted = ORDER with_names BY val ASC;
                         GENERATE FLATTEN(sorted);
                     }
 

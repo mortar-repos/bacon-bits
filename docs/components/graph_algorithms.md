@@ -6,7 +6,7 @@ All graphs in Bacon Bits are represented as adjacency matrices with the schema: 
 
 ## Pagerank
 
-Pagerank finds the "most important" vertices on graph, based on the structure of its edges. See [wikipedia](http://en.wikipedia.org/wiki/PageRank) for more detail.
+Pagerank finds the "most important" vertices on graph, based on the structure of its edges. See [wikipedia](http://en.wikipedia.org/wiki/PageRank) for more detail. TODO: FINISH THESE DOCS
 
 ## Personalized Pagerank
 
@@ -14,4 +14,4 @@ Personalized Pagerank is a modification of the Pagerank algorithm that finds the
 
 ## Shortest Paths
 
-A related problem to finding similar vertices is finding shortest paths on a graph. Taking the N closest vertices by shortest path distance also gives a neighborhood of similar vertices for each vertex. Unlike pagerank-based methods, this strategy requires no algorithm parameters other than the neighborhood size, making it a simpler and often faster way to find similar vertices. `pigscripts/github_shortest_paths.pig` demonstrates using Bacon Bits components to implement this algorithm on the Github repo similarity graph.
+A related problem to finding similar vertices is finding shortest paths on a graph. Taking the N closest vertices by shortest path distance also gives a neighborhood of similar vertices for each vertex. Unlike pagerank-based methods, this strategy requires no algorithm parameters other than the neighborhood size, making it a simpler way to find similar vertices. It is also faster than personalized pagerank. `pigscripts/github_shortest_paths.pig` demonstrates using Bacon Bits components to implement this algorithm on the Github repo similarity graph.
