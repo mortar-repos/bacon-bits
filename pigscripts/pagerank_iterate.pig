@@ -6,7 +6,7 @@ DEFINE Enumerate datafu.pig.bags.Enumerate('1');
 ----------------------------------------------------------------------------------------------------
 
 previous_pageranks      =   LOAD '$INPUT_PATH' USING PigStorage() AS (
-                                node: chararray, 
+                                node: int, 
                                 pagerank: double, 
                                 edges: {t: (to: int, weight: double)},
                                 sum_of_edge_weights: double
@@ -23,7 +23,7 @@ outbound_pageranks      =   FOREACH outbound_pageranks_temp GENERATE
 ----------------------------------------------------------------------------------------------------
 
 cogrouped               =   COGROUP previous_pageranks BY node, outbound_pageranks BY to;
-new_pageranks           =   FOREACH (cogrouped) GENERATE
+new_pageranks           =   FOREACH cogrouped GENERATE
                                 group AS node,
                                 ((1.0 - $DAMPING_FACTOR) / $NUM_NODES)
                                     + $DAMPING_FACTOR * SUM(outbound_pageranks.pagerank) AS pagerank,

@@ -6,7 +6,7 @@ All graphs in Bacon Bits are represented as adjacency matrices with the schema: 
 
 ## Pagerank
 
-Pagerank finds the "most important" vertices on graph, based on the structure of its edges. See [wikipedia](http://en.wikipedia.org/wiki/PageRank) for more detail. TODO: FINISH THESE DOCS
+Pagerank finds the "most important" vertices on graph, based on the structure of its edges. See [wikipedia](http://en.wikipedia.org/wiki/PageRank) for more detail. The simplest way to use Pagerank is through the [readymade controlscript](LINK TO docs/scripts/pagerank.md). Alteratively, you can use the library `controlscripts/lib/pagerank_lib.py`.
 
 ## Personalized Pagerank
 

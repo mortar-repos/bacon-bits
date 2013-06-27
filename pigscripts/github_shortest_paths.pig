@@ -8,8 +8,8 @@
  *     mortar baconbits:local:run github_shortest_paths -p OUTPUT_PATH=/a/path/for/output
  */
 
-%default GRAPH_INPUT_PATH    '../example_data/github_repo_similarity_matrix.txt'
-%default REPO_IDS_INPUT_PATH '../example_data/github_repo_ids.txt'
+%default GRAPH_INPUT_PATH    '../example_input/github_repo_similarity_matrix.txt'
+%default REPO_IDS_INPUT_PATH '../example_input/github_repo_ids.txt'
 
 %default NEIGHBORHOOD_SIZE  20      -- as the algorithm follows all possible paths between vertices,
                                     -- there can be a combinatorial explosion. to improve performance,

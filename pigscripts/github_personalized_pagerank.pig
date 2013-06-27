@@ -8,8 +8,8 @@
  *     mortar baconbits:local:run github_personalized_pagerank -p OUTPUT_PATH=/a/path/for/output
  */
 
-%default GRAPH_INPUT_PATH    '../example_data/github_repo_similarity_matrix.txt'
-%default REPO_IDS_INPUT_PATH '../example_data/github_repo_ids.txt'
+%default GRAPH_INPUT_PATH    '../example_input/github_repo_similarity_matrix.txt'
+%default REPO_IDS_INPUT_PATH '../example_input/github_repo_ids.txt'
 
 %default TELEPORT_PROB      0.333   -- at each step of the random walk, there is a chance
                                     -- of "teleporting" back to the source vertex. if this
