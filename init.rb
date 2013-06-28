@@ -6,4 +6,4 @@
 # cause the entire Mortar CLI tool to slow down.
 #
 require File.join(File.dirname(__FILE__), "bundle/bundler/setup")
-require "baconbits/mortar/command/bacon-bits"
+require "baconbits/mortar/command/baconbits"
