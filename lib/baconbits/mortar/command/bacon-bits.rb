@@ -89,11 +89,10 @@ class Mortar::Command::BaconBits < Mortar::Command::Base
   #
   def use
     Mortar::BaconBits::Lib.ensure_dir_exists "vendor"
-    Mortar::BaconBits::Lib.ensure_dir_exists "vendor/baconbits"
 
     bacon_bits_dir = Mortar::BaconBits::Lib.install_dir()
-    FileUtils.cp_r("#{bacon_bits_dir}/macros", "vendor/baconbits")
-    FileUtils.cp_r("#{bacon_bits_dir}/udfs", "vendor/baconbits")
+    FileUtils.cp_r("#{bacon_bits_dir}/macros", "vendor")
+    FileUtils.cp_r("#{bacon_bits_dir}/udfs", "vendor")
   end
 end
 
