@@ -32,18 +32,14 @@ DEFINE Recsys__ReplicateByKey                 com.mortardata.pig.collections.Rep
  * The basic pipline for a collaborative filter goes:
  *    1) Recsys__UIScores_To_IILinks
  *    2) Recsys__IILinksRaw_To_IILinksBayes
- *    3) Recsys__IILinksShortestPathsTwoSteps (or Recsys__IILinksShortestPathsThreeSteps or other alternatives)
+ *    3) Recsys__IILinksShortestPathsTwoSteps (or Recsys__IILinksRandomWalkTwoSteps or other alternatives)
  *    -- by this point you get item-to-item recommendations
  *    4) Recsys__UserItemNeighborhoods
  *    5) Recsys__FilterItemsAlreadySeenByUser
  *    6) Recsys__TopNUserRecs
  *    -- by this point you get user-to-item recommendations
+ *
  * See the comments for each macro for more details.
- *
- * Content-based filtering is still experimental.
- * An efficient implementation of K-Nearest-Neighbors is being worked on,
- * but is not yet ready for public consumption.
- *
  */
 ----------------------------------------------------------------------------------------------------
 
@@ -206,7 +202,8 @@ RETURNS ii_nhoods {
 ----------------------------------------------------------------------------------------------------
 
 /*
- * This is an alternate Step 3 for the default collaborative filter.
+ * This is an alternate Step 3 for the default collaborative filter
+ * and the one we use for the Github recommender.
  *
  * One thing that the shortest path macros does not detect is that
  * if there are two paths from item A to item D, ex.
@@ -226,10 +223,9 @@ RETURNS ii_nhoods {
  */
 DEFINE Recsys__IILinksRandomWalkTwoSteps(ii_links, neighborhood_size)
 RETURNS ii_nhoods {
-    trans_mat       =   Matrix__NormalizeRows($ii_links);
-    walk_step_1     =   Graph__RandomWalk_Init(trans_mat);
-    walk_step_2     =   Graph__RandomWalk_Step(walk_step_1, trans_mat, $neighborhood_size);
-    $ii_nhoods      =   Graph__RandomWalk_Complete(walk_step_2);
+    trans_mat, walk_step_1  =   Graph__RandomWalk_Init($ii_links);
+    walk_step_2             =   Graph__RandomWalk_Step(walk_step_1, trans_mat, $neighborhood_size);
+    $ii_nhoods              =   Graph__RandomWalk_Complete(walk_step_2);
 };
 
 /*
@@ -242,11 +238,10 @@ RETURNS ii_nhoods {
  */
 DEFINE Recsys__IILinksRandomWalkThreeSteps(ii_links, neighborhood_size)
 RETURNS ii_nhoods {
-    trans_mat       =   Matrix__NormalizeRows($ii_links);
-    walk_step_1     =   Graph__RandomWalk_Init(trans_mat);
-    walk_step_2     =   Graph__RandomWalk_Step(walk_step_1, trans_mat, $neighborhood_size);
-    walk_step_3     =   Graph__RandomWalk_Step(walk_step_2, trans_mat, $neighborhood_size);
-    $ii_nhoods      =   Graph__RandomWalk_Complete(walk_step_3);
+    trans_mat, walk_step_1  =   Graph__RandomWalk_Init($ii_links);
+    walk_step_2             =   Graph__RandomWalk_Step(walk_step_1, trans_mat, $neighborhood_size);
+    walk_step_3             =   Graph__RandomWalk_Step(walk_step_2, trans_mat, $neighborhood_size);
+    $ii_nhoods              =   Graph__RandomWalk_Complete(walk_step_2);
 };
 
 ----------------------------------------------------------------------------------------------------
@@ -357,69 +352,3 @@ RETURNS with_names {
                         user AS user, item AS item, affinity AS affinity,
                         name AS reason, reason_flag AS reason_flag;
 };
-
-----------------------------------------------------------------------------------------------------
-
-/*
- * PROTOTYPE KNN IMPLEMENTATION FOR CONTENT-BASED FILTERING
- * NOT READY FOR PUBLIC CONSUMPTION
- *
- * items: {id: int, features: PigCollection}
- * -->
- * global_knns: {row: int, col: int, val: float}
- */
-DEFINE Recsys__KNearestNeighbors(items)
-RETURNS global_knns { 
-    replicated      =   FOREACH $items GENERATE
-                            id, FLATTEN(Recsys__ReplicateByKey(features)) AS (key, features);
-
-    by_key          =     GROUP replicated BY key;
-    by_key          =    FILTER by_key BY COUNT($1) > 1;
-    partition_knns  =   FOREACH by_key GENERATE
-                            group AS partition_id,
-                            FLATTEN(Recsys__KNearestNeighbors(replicated.(id, features)))
-                            AS (item_id, knn);
-
-    $global_knns    =   FOREACH (GROUP partition_knns BY item_id) GENERATE
-                            group AS row,
-                            FLATTEN(Recsys__FromPigCollectionToBag(Recsys__MergeAndKeepTopN(partition_knns.knn)))
-                            AS (col: int, val: float);
-};
-
-/*
- * PROTOTYPE KNN IMPLEMENTATION FOR CONTENT-BASED FILTERING
- * NOT READY FOR PUBLIC CONSUMPTION
- *
- * items: {id: int, features: PigCollection}
- * -->
- * global_knns: {row: int, col: int, val: float}
- */
-DEFINE Recsys__KNearestNeighbors_ReducerLoadBalanced(items)
-RETURNS global_knns { 
-    replicated      =   FOREACH $items GENERATE
-                        id, FLATTEN(Recsys__ReplicateByKey(features)) AS (key, features);
-
-    key_counts      =   FOREACH (GROUP replicated BY key) GENERATE
-                            group AS key, COUNT($1) AS count;
-    key_counts      =   FILTER key_counts BY count > 1;
-
-    reducer_allocs  =   FOREACH (GROUP key_counts ALL) GENERATE
-                            FLATTEN(Recsys__LoadBalancingReducerAllocation($1))
-                            AS (key, reducer);
-    joined          =   FOREACH (JOIN reducer_allocs BY key, replicated BY key) GENERATE
-                            replicated::id          AS id,
-                            reducer_allocs::key     AS key,
-                            reducer_allocs::reducer AS reducer,
-                            replicated::features    AS features;
-
-    balanced_groups =   GROUP joined BY (key, reducer)
-                        PARTITION BY com.mortardata.pig.partitioners.PrecalculatedPartitioner;
-    partition_knns  =   FOREACH balanced_groups GENERATE
-                            group.key AS partition_id,
-                            FLATTEN(KNearestNeighbors(joined.(id, features)))
-                            AS (item_id, knn);
-
-    $global_knns    =   FOREACH (GROUP partition_knns BY item_id) GENERATE
-                            group AS row,
-                            FLATTEN(Recsys__FromPigCollectionToBag(Recsys__MergeAndKeepTopN(partition_knns.knn)))
-                            AS (col: int, val: float);
