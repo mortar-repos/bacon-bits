@@ -4,24 +4,23 @@ Bacon Bits is a library of Pig macros and UDFs which implement useful algorithms
 
 ## Installation
 
-These installation instructions assume you have already installed the Mortar Development Framework.
+This repo is public to demo the components, but we have not yet implemented the system that will distribute them. We'll be building a tool on top of maven that will allow you to package all your Pig resources (macros, python udfs, java udfs, controlscript components) and add package dependencies to your projects.
 
-To install Bacon Bits, run:
+## Manifest
 
-    mortar plugins:install git@github.com:mortardata/bacon-bits.git
+Documented components:
 
-This will add a command `mortar baconbits` to the mortar gem. You can use this to run some premade algorithms, such as Pagerank and a Graph Sampler, directly. See the documentation for individual scripts in `docs/scripts`.
+- Macros for [sparse matrix](macros/matrix.pig) and [graph](macros/graph.pig) operations
+- Macros implementing a complete [collaborative filter](macros/recsys.pig)
+- Macros for [normalizing data](macros/normalization.pig) into the range [0, 1]
+- [Graph Sampler](controlscripts/graph_sampler.py) controlscript which extracts a contiguous neighborhood of a graph for local development. You can specify a set of seed vertices to take the neighborhoods of.
+- [Pagerank](controlscript/pagerank.py) implementation which uses a [reusable "iterate-until-convergence" component](controlscripts/lib/iteration_utils)
 
-To use Bacon Bits macros and UDFs in your own Mortar project, go to the root directory of the project and run:
+Experimental, undocumented components:
 
-    mortar baconbits:use
-
-This will install all of the Bacon Bits components into the `vendor` directory of your Mortar project. They are automatically included in Pig's search path for resources, so you can reference them in your IMPORT and REGISTER statements just using the filename, for example `IMPORT 'matrix.pig';`. See the documentation for components in `docs/components`.
-
-## Updating
-
-To update Bacon Bits, run:
-
-    mortar plugins:update baconbits
-
-And then re-run `mortar baconbits:use` for the Mortar project you are working on.
+- A framework called PigCollection for serializing machine learning feature vectors (dense vectors, sparse vectors, or sets) as Pig bytearrays to greatly reduce memory overhead and consequently time spent writing to disk. UDFs handle all the serialization/deserialization for you. It also facilitates writing generic UDFs such as Distance which can handle all types of feature vectors (dense, sparse, set) and apply an appropriate metric/algorithm for each type.
+- An implementation of K Nearest Neighbors using PigCollection feature vectors. This could be used for content-based filtering.
+- An implementation of Term-Frequency-Inverse-Document-Frequency (TF-IDF) using PigCollection feature vectors.
+- A prototype load-balancing UDF that intelligently allocates bags after a GROUP-BY to reducers in order to combat reducer skew.
+- An implementation of Resevoir Sampling. Pig's SAMPLE operator allows you to take x% of a relation, but this allows you to take exactly N items.
+- A controlscript library for checkpointing sequences of pigscripts and automatically restarting from the script that failed after the problem has been fixed.
