@@ -37,12 +37,18 @@ REGISTER 'recsys.py' USING jython AS recsys_udfs;
  * The basic pipline for a collaborative filter goes:
  *    1) Recsys__UIScores_To_IILinks
  *    2) Recsys__IILinksRaw_To_IILinksBayes
+ *    -- if you want to boost certain links to account for domain-specific considerations,
+ *    -- you should do it at this point (between steps 2 and 3)
  *    3) Recsys__IILinksShortestPathsTwoSteps (or Recsys__IILinksShortestPathsThreeSteps or other alternatives)
  *    -- by this point you get item-to-item recommendations
  *    4) Recsys__UserItemNeighborhoods
  *    5) Recsys__FilterItemsAlreadySeenByUser
  *    6) Recsys__TopNUserRecs
  *    -- by this point you get user-to-item recommendations
+ *
+ * Optionally to help you generate the User-Item scores that the CF takes as input, there are the macros:
+ *    1) Recsys__AggregateUIScoresAndApplyLogisticScale
+ *    2) Recsys__FilterOutlierUsers
  *
  * See the comments for each macro for more details.
  */
@@ -315,6 +321,47 @@ RETURNS with_names {
 
 ----------------------------------------------------------------------------------------------------
 
+/*
+ * 1) aggregates all scores for each unique user-item pair
+ * 2) applies a logistic scale so that user-item pairs with huge scores face diminishing returns
+ *    (maps all scores into the range [0, 1])
+ *
+ * ui_scores: {user: int, item: int, score: float}
+ * logistic_param: float
+ * -->
+ * out: {user: int, item: int, score: float}
+ */
+DEFINE Recsys__AggregateUIScoresAndApplyLogisticScale(ui_scores, logistic_param)
+RETURNS out {
+    tmp         =   FOREACH (GROUP $ui_scores BY (user, item)) GENERATE
+                        FLATTEN(group) AS (user, item),
+                        SUM($1.score) AS score;
+    $out        =   FOREACH tmp GENERATE
+                        user, item,
+                        recsys_udfs.logistic_scale(score, $logistic_param) AS score;
+};
+
+/*
+ * The default collaborative filter algorithm is O([max num edges per user]^2).
+ * If any single user has thousands of edges, this will result in huge reducer skew.
+ * This macro filters out these outlier users for purposes of graph generation.
+ * Once you have item-item recs from the CF, you can still give these outlier users
+ * recommendations based on the unfiltered ui_scores that was the input to this macro.
+ *
+ * ui_scores: {user: int, item: int, score: float}
+ * outlier_user_threshold: int
+ * -->
+ * out: {user: int, item: int, score: float}
+ */
+DEFINE Recsys__FilterOutlierUsers(ui_scores, outlier_user_threshold)
+RETURNS out {
+    ui_grpd     =   GROUP $ui_scores BY user;
+    ui_filt     =   FILTER ui_grpd BY COUNT($1) <= $outlier_user_threshold;
+    $out        =   FOREACH ui_grpd GENERATE FLATTEN($1) AS (user, item, score);
+};
+
+----------------------------------------------------------------------------------------------------
+
 -- Experimental KNN implementation for content-based filtering
 
 DEFINE Recsys__KNearestNeighbors(items)
@@ -569,7 +616,7 @@ RETURNS ii_nhoods {
                             (graph::col == copy::col ?
                                 graph::reason_1 : 'GRAPH') AS reason_1,
                             (graph::col == copy::col ?
-                                graph::reason_2 : 'GRAPH') AS reason_2;
+                                graph::reason_2 : NULL) AS reason_2;
     squared         =   FOREACH (GROUP sq_terms BY (row, col)) GENERATE
                             FLATTEN(group) AS (row, col),
                             FLATTEN(recsys_udfs.shortest_path(sq_terms.(val, reason_1, reason_2)))
