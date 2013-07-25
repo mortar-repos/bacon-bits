@@ -38,6 +38,7 @@ public class ExtractFields extends EvalFunc<DataBag> {
 
     public ExtractFields() {
         super();
+        this.inferTypes = true;
     }
 
     @Override
