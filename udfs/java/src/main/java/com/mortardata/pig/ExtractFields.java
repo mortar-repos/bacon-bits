@@ -32,7 +32,12 @@ public class ExtractFields extends EvalFunc<DataBag> {
     private boolean inferTypes;
 
     public ExtractFields(String inferTypes) {
+        super();
         this.inferTypes = Boolean.parseBoolean(inferTypes);
+    }
+
+    public ExtractFields() {
+        super();
     }
 
     @Override
