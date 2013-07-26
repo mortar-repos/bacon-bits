@@ -1,4 +1,4 @@
-package com.mortardata.pig;
+package com.mortardata.pig.characterize;
 
 import org.junit.Test;
 import junit.framework.Assert;
@@ -110,6 +110,3 @@ public class TestExtractFields {
     }
     
 }
-
-
-

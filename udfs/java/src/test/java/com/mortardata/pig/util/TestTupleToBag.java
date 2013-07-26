@@ -1,5 +1,4 @@
-package com.mortardata.pig;
-
+package com.mortardata.pig.util;
 
 import junit.framework.Assert;
 import org.apache.pig.data.BagFactory;

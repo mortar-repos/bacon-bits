@@ -5,7 +5,7 @@
   <artifactId>bacon-bits</artifactId>
   <packaging>jar</packaging>
   <version>0.1.0</version>
-  <name>bacon-bits-dev</name>
+  <name>bacon-bits</name>
   <url>http://maven.apache.org</url>
 
 

@@ -1,4 +1,4 @@
-package com.mortardata.pig;
+package com.mortardata.pig.util;
 
 import org.apache.pig.EvalFunc;
 import org.apache.pig.data.BagFactory;

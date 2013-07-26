@@ -1,4 +1,4 @@
-package com.mortardata.pig;
+package com.mortardata.pig.util;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -16,7 +16,7 @@ import org.apache.pig.data.Tuple;
  *
  * Ex:
  *
- * DEFINE IN com.mortardata.pig.IN('3,5,7');
+ * DEFINE IN com.mortardata.pig.util.IN('3,5,7');
  *
  * FILTER my_relation by IN(first_field);
  */

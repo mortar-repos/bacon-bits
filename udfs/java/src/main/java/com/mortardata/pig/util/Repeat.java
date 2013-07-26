@@ -1,4 +1,4 @@
-package com.mortardata.pig;
+package com.mortardata.pig.util;
 
 import java.util.List;
 import java.util.Random;
