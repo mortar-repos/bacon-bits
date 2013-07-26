@@ -613,10 +613,18 @@ RETURNS ii_nhoods {
                             graph::row AS row,
                              copy::col AS col,
                             graph::val + copy::val AS val,
-                            (graph::col == copy::col ?
-                                graph::reason_1 : 'GRAPH') AS reason_1,
-                            (graph::col == copy::col ?
-                                graph::reason_2 : NULL) AS reason_2;
+                            -- is copy a self-loop?
+                            (copy::row == copy::col ?
+                                graph::reason_1 :
+                                -- is graph a self-loop?
+                                (graph::row == graph::col ? copy::reason_1 : 'GRAPH')
+                            ) AS reason_1,
+                            -- is copy a self-loop?
+                            (copy::row == copy::col ?
+                                graph::reason_2 :
+                                -- is graph a self-loop?
+                                (graph::row == graph::col ? copy::reason_2 : NULL)
+                            ) AS reason_2;
     squared         =   FOREACH (GROUP sq_terms BY (row, col)) GENERATE
                             FLATTEN(group) AS (row, col),
                             FLATTEN(recsys_udfs.shortest_path(sq_terms.(val, reason_1, reason_2)))
