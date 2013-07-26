@@ -28,6 +28,8 @@ DEFINE Recsys__ReplicateByKey                 com.mortardata.pig.collections.Rep
 REGISTER 'datafu-0.0.10.jar';
 DEFINE Recsys__Enumerate datafu.pig.bags.Enumerate('1');
 
+REGISTER 'bacon-bits-0.1.0.jar';
+
 REGISTER 'recsys.py' USING jython AS recsys_udfs;
 
 ----------------------------------------------------------------------------------------------------
@@ -48,7 +50,7 @@ REGISTER 'recsys.py' USING jython AS recsys_udfs;
  *
  * Optionally to help you generate the User-Item scores that the CF takes as input, there are the macros:
  *    1) Recsys__AggregateUIScoresAndApplyLogisticScale
- *    2) Recsys__FilterOutlierUsers
+ *    2) Recsys__LimitSignalsPerUser
  *
  * See the comments for each macro for more details.
  */
@@ -229,27 +231,27 @@ RETURNS ii_nhoods {
  * The reason_flag field was used to note when we were doing this mapping,
  * so the user could be informed of this on the front-end.
  *
- * ui_affinities: {user: int, item: int, affinity: float, reason_flag: int/chararray}
- * item_nhoods:   {item: int, neighbor: int, affinity: float}
+ * ui_scores:   {user: int, item: int, score: float, reason_flag: int/chararray}
+ * item_nhoods: {item: int, neighbor: int, score: float}
  * -->
- * user_nhoods:   {user: int, item: int, affinity: float, reason: int, reason_flag: int/chararray} 
+ * user_nhoods: {user: int, item: int, score: float, reason: int, reason_flag: int/chararray} 
  */
-DEFINE Recsys__UserItemNeighborhoods(ui_affinities, item_nhoods)
+DEFINE Recsys__UserItemNeighborhoods(ui_scores, item_nhoods)
 RETURNS user_nhoods {
-    user_nhoods_tmp =   FOREACH (JOIN $ui_affinities BY item, $item_nhoods BY item) GENERATE
+    user_nhoods_tmp =   FOREACH (JOIN $ui_scores BY item, $item_nhoods BY item) GENERATE
                                               user AS user,
                             $item_nhoods::neighbor AS item,
-                            (float) SQRT($ui_affinities::affinity *
-                                         $item_nhoods::affinity) AS affinity,
+                            (float) SQRT($ui_scores::score *
+                                         $item_nhoods::score) AS score,
                                 $item_nhoods::item AS reason,
                                        reason_flag AS reason_flag;
 
     -- hack to get around a NullPointerException bug in the TOP builtin UDF
     $user_nhoods    =   FOREACH (GROUP user_nhoods_tmp BY
                                  ((((long) (user + item) * (long) (user + item + 1)) / 2) + item)) {
-                            sorted = ORDER user_nhoods_tmp BY affinity DESC;
+                            sorted = ORDER user_nhoods_tmp BY score DESC;
                             best   = LIMIT sorted 1;
-                            GENERATE FLATTEN(best) AS (user, item, affinity, reason, reason_flag);
+                            GENERATE FLATTEN(best) AS (user, item, score, reason, reason_flag);
                         }
 };
 
@@ -260,19 +262,20 @@ RETURNS user_nhoods {
  * so that a user is never shown an item they are known to have already seen.
  * You may also wish to apply your own domain-specific filters to the user neighborhoods.
  *
- * user_nhoods:   {user: int, item: int, affinity: float, reason: int, reason_flag: int/chararray}
- * ui_affinities: {user: int, item: int, affinity: float, reason_flag: int/chararray}
+ * user_nhoods: {user: int, item: int, score: float, reason: int, reason_flag: int/chararray}
+ * ui_scores:   {user: int, item: int, score: float, reason_flag: int/chararray}
+ *              or just {user: int, item: int} the other fields are optional
  * -->
- * user_nhoods_filt: {user: int, item: int, affinity: float, reason: int, reason_flag: int/chararray}
+ * user_nhoods_filt: {user: int, item: int, score: float, reason: int, reason_flag: int/chararray}
  */
-DEFINE Recsys__FilterItemsAlreadySeenByUser(user_nhoods, ui_affinities)
+DEFINE Recsys__FilterItemsAlreadySeenByUser(user_nhoods, ui_scores)
 RETURNS filtered {
-    joined      =   JOIN $user_nhoods   BY (user, item) LEFT OUTER,
-                         $ui_affinities BY (user, item);
-    $filtered   =   FOREACH (FILTER joined BY $ui_affinities::item IS null) GENERATE
+    joined      =   JOIN $user_nhoods BY (user, item) LEFT OUTER,
+                         $ui_scores   BY (user, item);
+    $filtered   =   FOREACH (FILTER joined BY $ui_scores::item IS null) GENERATE
                                $user_nhoods::user AS user,
                                $user_nhoods::item AS item,
-                           $user_nhoods::affinity AS affinity,
+                              $user_nhoods::score AS score,
                              $user_nhoods::reason AS reason,
                         $user_nhoods::reason_flag AS reason_flag;
 };
@@ -282,17 +285,17 @@ RETURNS filtered {
  *
  * Takes the top N recommendations from a user's neighborhood after any filtering has been applied.
  *
- * user_nhoods: {user: int, item: int, affinity: float, reason: int, reason_flag: int/chararray}
+ * user_nhoods: {user: int, item: int, score: float, reason: int, reason_flag: int/chararray}
  * num_recs:    int
  * --> 
- * user_recs: {user: int, item: int, affinity: float, reason: int, reason_flag: int/chararray}
+ * user_recs: {user: int, item: int, score: float, reason: int, reason_flag: int/chararray}
  */
 DEFINE Recsys__TopNUserRecs(user_nhoods, num_recs)
 RETURNS user_recs {
     $user_recs  =   FOREACH (GROUP $user_nhoods BY user) {
-                        sorted = ORDER $user_nhoods BY affinity DESC;
+                        sorted = ORDER $user_nhoods BY score DESC;
                         best   = LIMIT sorted $num_recs;
-                        GENERATE FLATTEN(best) AS (user, item, affinity, reason, reason_flag);
+                        GENERATE FLATTEN(best) AS (user, item, score, reason, reason_flag);
                     }
 };
 
@@ -300,22 +303,22 @@ RETURNS user_recs {
  * This is a utility to return the output of the default collaborative filter
  * from integer ids to names for debugging.
  *
- * user_nhoods: {user: int, item: int, affinity: float, reason: int, reason_flag: int/chararray}
+ * user_nhoods: {user: int, item: int, score: float, reason: int, reason_flag: int/chararray}
  * user_names:  {id: int, name: chararray}
  * item_names:  {id: int, name: chararray}
  * -->
- * with_names:  {user: chararray, item: chararray, affinity: float, reason: chararray, reason_flag: int/chararray}
+ * with_names:  {user: chararray, item: chararray, score: float, reason: chararray, reason_flag: int/chararray}
  */
 DEFINE Recsys__UserRecsIntegerIdsToNames(user_nhoods, user_names, item_names)
 RETURNS with_names {
     join_1      =   FOREACH (JOIN $user_names BY id, $user_nhoods BY user) GENERATE
-                        name AS user, item AS item, affinity AS affinity,
+                        name AS user, item AS item, score AS score,
                         reason AS reason, reason_flag AS reason_flag;    
     join_2      =   FOREACH (JOIN $item_names BY id, join_1 BY item) GENERATE
-                        user AS user, name AS item, affinity AS affinity,
+                        user AS user, name AS item, score AS score,
                         reason AS reason, reason_flag AS reason_flag;
     $with_names =   FOREACH (JOIN $item_names BY id, join_2 BY reason) GENERATE
-                        user AS user, item AS item, affinity AS affinity,
+                        user AS user, item AS item, score AS score,
                         name AS reason, reason_flag AS reason_flag;
 };
 
@@ -344,20 +347,24 @@ RETURNS out {
 /*
  * The default collaborative filter algorithm is O([max num edges per user]^2).
  * If any single user has thousands of edges, this will result in huge reducer skew.
- * This macro filters out these outlier users for purposes of graph generation.
- * Once you have item-item recs from the CF, you can still give these outlier users
- * recommendations based on the unfiltered ui_scores that was the input to this macro.
+ * This macro only takes a certain maximum number of signals from these outlier users
+ * for purposes of graph generation. Once you have item-item recs from the CF, you can still
+ * give the outlier users recommendations based on the unfiltered ui_scores that was the input
+ * to this macro.
+ *
+ * TODO: make this take the most recent signals instead of just a random sample
  *
  * ui_scores: {user: int, item: int, score: float}
- * outlier_user_threshold: int
+ * max_signals_per_user: int
  * -->
  * out: {user: int, item: int, score: float}
  */
-DEFINE Recsys__FilterOutlierUsers(ui_scores, outlier_user_threshold)
+DEFINE Recsys__LimitSignalsPerUser(ui_scores, max_signals_per_user)
 RETURNS out {
-    ui_grpd     =   GROUP $ui_scores BY user;
-    ui_filt     =   FILTER ui_grpd BY COUNT($1) <= $outlier_user_threshold;
-    $out        =   FOREACH ui_grpd GENERATE FLATTEN($1) AS (user, item, score);
+    DEFINE Recsys__ResevoirSample com.mortardata.pig.sampling.ResevoirSample('$max_signals_per_user');
+    $out        =   FOREACH (GROUP ui_scores BY user) GENERATE
+                        FLATTEN(Recsys__ResevoirSample($1))
+                        AS (user, item, score);
 };
 
 ----------------------------------------------------------------------------------------------------
@@ -402,7 +409,7 @@ RETURNS global_knns {
                             reducer_allocs::reducer AS reducer,
                             replicated::features    AS features;
 
-    balanced_groups =   GROUP joined BY (key, reducer)
+    balanced_groups =   GROUP joined BY (reducer, key)
                         PARTITION BY com.mortardata.pig.partitioners.PrecalculatedPartitioner;
     partition_knns  =   FOREACH balanced_groups GENERATE
                             group.key AS partition_id,
@@ -504,7 +511,7 @@ RETURNS final_sig_weights {
  * Evaluate/characterize weights generated by Recsys__WeightSignals
  *  
  * ui_signals:  {user, item, signal}
- * sig_weights: {user, signal weight}
+ * sig_weights: {user, signal, weight}
  * -->
  * sig_stats: {signal, fraction_of_events, fraction_of_total_weight}
  */
@@ -651,4 +658,67 @@ RETURNS ranked {
                             GENERATE FLATTEN(Recsys__Enumerate(ordered))
                                      AS (row, col, val, reason_1, reason_2, rank);
                         }
+};
+
+----------------------------------------------------------------------------------------------------
+
+/*
+ * Modifications of the II neighborhoods -> UI recommendations steps of the collab filter
+ * to better handle cases where there is low variance in the user-item scores,
+ * such as for video sharing where a user shares a video almost always only once.
+ */
+
+/*
+ * Same as Recsys__UserItemNeighborhoods except
+ *    1) Do not take a sqrt when multiplying ui_scores::score by item_nhoods::score by score
+ *    2) instead of taking the best link to an item in a user's neighborhood,
+ *       sum up the weight of all links to that item.
+ *    3) output top 2 reasons instead of 1
+ *
+ * These changes are conjectured to be more effective when the variance of the ui scores
+ * is very low (i.e. every signal has the same or almost the same weight);
+ *
+ * ui_scores:   {user: int, item: int, score: float, reason_flag: int/chararray}
+ * item_nhoods: {item: int, neighbor: int, score: float}
+ * -->
+ * user_nhoods: {user: int, item: int, score: float, reason_1: int, reason_2: int, reason_flag: int/chararray} 
+ */
+DEFINE Recsys__UserItemNeighborhoods_LowUIScoreVariance(ui_scores, item_nhoods)
+RETURNS user_nhoods {
+    user_nhoods_tmp =   FOREACH (JOIN $ui_scores BY item, $item_nhoods BY item) GENERATE
+                                              user AS user,
+                            $item_nhoods::neighbor AS item,
+                             ($ui_scores::score *
+                              $item_nhoods::score) AS score,
+                                $item_nhoods::item AS reason,
+                                       reason_flag AS reason_flag;
+
+    $user_nhoods    =   FOREACH (GROUP user_nhoods_tmp BY (user, item)) {
+                            top_2 = TOP(2, 2, $1);
+                            GENERATE FLATTEN(group) AS (user, item),
+                                      SUM($1.score) AS score,
+                                      FLATTEN(top_2.reason) AS (reason_1, reason_2);
+
+};
+
+/*
+ * Same as Recsys__FilterItemsAlreadySeenByUser except that it supports
+ * input with 2 reason fields instead of 1
+ *
+ * user_nhoods: {user: int, item: int, score: float, reason: int, reason_2: int, reason_flag: int/chararray}
+ * ui_scores:   {user: int, item: int, ...}
+ * -->
+ * user_nhoods_filt: {user: int, item: int, score: float, reason: int, reason_2: int, reason_flag: int/chararray}
+ */
+DEFINE Recsys__FilterItemsAlreadySeenByUser_TwoReasonFields(user_nhoods, ui_scores)
+RETURNS filtered {
+    joined      =   JOIN $user_nhoods BY (user, item) LEFT OUTER,
+                         $ui_scores   BY (user, item);
+    $filtered   =   FOREACH (FILTER joined BY $ui_scores::item IS null) GENERATE
+                               $user_nhoods::user AS user,
+                               $user_nhoods::item AS item,
+                              $user_nhoods::score AS score,
+                           $user_nhoods::reason_1 AS reason_1,
+                           $user_nhoods::reason_2 AS reason_2,
+                        $user_nhoods::reason_flag AS reason_flag;
 };
