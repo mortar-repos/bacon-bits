@@ -554,7 +554,7 @@ RETURNS ii_links {
     agg_ii_links    =   FOREACH (GROUP $ii_link_terms BY (row, col)) GENERATE
                             FLATTEN(group) AS (row, col),
                             (float) SUM($ii_link_terms.val) AS val,
-                            FLATTEN(recsys_udfs.top_two_reasons($ii_link_terms.(val, reason)))
+                            FLATTEN(recsys_udfs.top_two_reasons__chararray($ii_link_terms.(val, reason)))
                             AS (reason_1, reason_2);
 
     $ii_links       =   FILTER agg_ii_links BY val >= $min_link_weight;
@@ -671,17 +671,17 @@ RETURNS ranked {
 /*
  * Same as Recsys__UserItemNeighborhoods except
  *    1) Do not take a sqrt when multiplying ui_scores::score by item_nhoods::score by score
- *    2) instead of taking the best link to an item in a user's neighborhood,
+ *    2) Instead of taking the best link to an item in a user's neighborhood,
  *       sum up the weight of all links to that item.
  *    3) output top 2 reasons instead of 1
  *
  * These changes are conjectured to be more effective when the variance of the ui scores
  * is very low (i.e. every signal has the same or almost the same weight);
  *
- * ui_scores:   {user: int, item: int, score: float, reason_flag: int/chararray}
+ * ui_scores:   {user: int, item: int, score: float}
  * item_nhoods: {item: int, neighbor: int, score: float}
  * -->
- * user_nhoods: {user: int, item: int, score: float, reason_1: int, reason_2: int, reason_flag: int/chararray} 
+ * user_nhoods: {user: int, item: int, score: float, reason_1: int, reason_2: int} 
  */
 DEFINE Recsys__UserItemNeighborhoods_LowUIScoreVariance(ui_scores, item_nhoods)
 RETURNS user_nhoods {
@@ -690,35 +690,32 @@ RETURNS user_nhoods {
                             $item_nhoods::neighbor AS item,
                              ($ui_scores::score *
                               $item_nhoods::score) AS score,
-                                $item_nhoods::item AS reason,
-                                       reason_flag AS reason_flag;
+                                $item_nhoods::item AS reason;
 
-    $user_nhoods    =   FOREACH (GROUP user_nhoods_tmp BY (user, item)) {
-                            top_2 = TOP(2, 2, $1);
-                            GENERATE FLATTEN(group) AS (user, item),
-                                      SUM($1.score) AS score,
-                                      FLATTEN(top_2.reason) AS (reason_1, reason_2);
-
+    $user_nhoods    =   FOREACH (GROUP user_nhoods_tmp BY (user, item)) GENERATE
+                                FLATTEN(group) AS (user, item),
+                                SUM($1.score) AS score,
+                                FLATTEN(recsys_udfs.top_two_reasons__int($1.(score, reason)))
+                                AS (reason_1, reason_2);
 };
 
 /*
  * Same as Recsys__FilterItemsAlreadySeenByUser except that it supports
  * input with 2 reason fields instead of 1
  *
- * user_nhoods: {user: int, item: int, score: float, reason: int, reason_2: int, reason_flag: int/chararray}
+ * user_nhoods: {user: int, item: int, score: float, reason: int, reason_2: int}
  * ui_scores:   {user: int, item: int, ...}
  * -->
- * user_nhoods_filt: {user: int, item: int, score: float, reason: int, reason_2: int, reason_flag: int/chararray}
+ * user_nhoods_filt: {user: int, item: int, score: float, reason: int, reason_2: int}
  */
 DEFINE Recsys__FilterItemsAlreadySeenByUser_TwoReasonFields(user_nhoods, ui_scores)
 RETURNS filtered {
     joined      =   JOIN $user_nhoods BY (user, item) LEFT OUTER,
                          $ui_scores   BY (user, item);
-    $filtered   =   FOREACH (FILTER joined BY $ui_scores::item IS null) GENERATE
-                               $user_nhoods::user AS user,
-                               $user_nhoods::item AS item,
-                              $user_nhoods::score AS score,
-                           $user_nhoods::reason_1 AS reason_1,
-                           $user_nhoods::reason_2 AS reason_2,
-                        $user_nhoods::reason_flag AS reason_flag;
+    $filtered   =   FOREACH (FILTER joined BY $ui_scores::item IS NULL) GENERATE
+                            $user_nhoods::user AS user,
+                            $user_nhoods::item AS item,
+                           $user_nhoods::score AS score,
+                        $user_nhoods::reason_1 AS reason_1,
+                        $user_nhoods::reason_2 AS reason_2;
 };
