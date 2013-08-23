@@ -38,13 +38,12 @@ public class TimeSeriesItemLinker extends EvalFunc<DataBag> implements Accumulat
     public Schema outputSchema(Schema input) {
         try {
             List<Schema.FieldSchema> outputTupleFields = new ArrayList<Schema.FieldSchema>();
-            outputTupleFields.add(new Schema.FieldSchema("row", DataType.INTEGER));
-            outputTupleFields.add(new Schema.FieldSchema("col", DataType.INTEGER));
-            outputTupleFields.add(new Schema.FieldSchema("val", DataType.FLOAT));
+            outputTupleFields.add(new Schema.FieldSchema("item_A", DataType.CHARARRAY));
+            outputTupleFields.add(new Schema.FieldSchema("item_B", DataType.CHARARRAY));
             
             return new Schema(new Schema.FieldSchema(
-                "b", new Schema(new Schema.FieldSchema(
-                    "t", new Schema(outputTupleFields), DataType.TUPLE
+                "item_links", new Schema(new Schema.FieldSchema(
+                    null, new Schema(outputTupleFields), DataType.TUPLE
                 )), DataType.BAG
             ));
         } catch (FrontendException e) {
@@ -52,7 +51,6 @@ public class TimeSeriesItemLinker extends EvalFunc<DataBag> implements Accumulat
         }
     }
 
-    // input schema: ({(item: int, score: float, timestamp: chararray)})
     public void accumulate(Tuple input) throws IOException {
         DataBag bag = (DataBag) input.get(0);
         if (window == null) {
@@ -64,19 +62,14 @@ public class TimeSeriesItemLinker extends EvalFunc<DataBag> implements Accumulat
 
         for (Tuple u : bag) {
             for (Tuple v : window) {
-                // TODO: weight link inversely proportional to delta-t, using a logistic scale
-                // You can access timestamp with (String) u.get(2) or (String) v.get(2)
-
-                Tuple w = tf.newTuple(3);
+                Tuple w = tf.newTuple(2);
                 w.set(0, u.get(0));
                 w.set(1, v.get(0));
-                w.set(2, Math.min((Float) u.get(1), (Float) v.get(1)));
                 output.add(w);
 
-                w = tf.newTuple(3);
+                w = tf.newTuple(2);
                 w.set(0, v.get(0));
                 w.set(1, u.get(0));
-                w.set(2, Math.min((Float) u.get(1), (Float) v.get(1)));
                 output.add(w);
             }
 

@@ -9,4 +9,5 @@ illustrate-output
 bundle
 .bundle
 example_output
+*.jar
 udfs/java/target

@@ -28,7 +28,7 @@
  *
  * Example Usage:
  * tf_idfs: { id: int, term: chararray, tf_idf: double }
- * normalized = Stats__LogarithmicNormalization(tf_idfs, 'tf_idf', 'id, term');
+ * normalized = Normalization__LogarithmicTransform(tf_idfs, 'tf_idf', 'id, term');
  */
 
 DEFINE Normalization__LinearTransform(samples, field, projection)
