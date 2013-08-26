@@ -324,9 +324,9 @@ RETURNS graph, paths {
                             }
 
     $graph              =   FOREACH (JOIN source_items BY item, graph_tmp BY item_A) GENERATE
-                                item_A AS item_A, item_B AS item_B, dist AS dist;
+                                item_A AS item_A, item_B AS item_B, dist AS dist, 1 AS steps: int;
 
-    graph_copy          =   FOREACH graph_tmp GENERATE *;
+    graph_copy          =   FOREACH graph_tmp GENERATE item_A, item_B, dist;
     dest_verts_dup      =   FOREACH graph_copy GENERATE item_B AS id;
     dest_verts          =   DISTINCT dest_verts_dup;
     self_loops          =   FOREACH dest_verts GENERATE
