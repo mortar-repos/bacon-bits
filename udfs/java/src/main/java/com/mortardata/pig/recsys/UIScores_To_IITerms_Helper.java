@@ -11,6 +11,7 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.logicalLayer.FrontendException;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
+import org.apache.pig.tools.pigstats.PigStatusReporter;
 
 import com.google.common.collect.ImmutableList;
 
@@ -43,22 +44,35 @@ public class UIScores_To_IITerms_Helper extends EvalFunc<DataBag> {
     public DataBag exec(Tuple input) throws IOException {
         DataBag inputBag = (DataBag) input.get(0);
         DataBag outputBag = bf.newDefaultBag();
+        PigStatusReporter reporter = PigStatusReporter.getInstance();
 
         int i = 0;
         for (Tuple u : inputBag) {
             int j = 0;
             for (Tuple v : inputBag) {
                 if (j > i) {
+                    Float weight
+                        = new Float(Math.min(
+                            (Float) u.get(2),
+                            (Float) v.get(2))
+                        );
+
                     outputBag.add(
                         tf.newTupleNoCopy(
                             ImmutableList.of(
-                                u.get(1), // item_A
-                                v.get(1), // item_B
-                                // weight
-                                new Float(Math.min(
-                                    (Float) u.get(2),
-                                    (Float) v.get(2))
-                                )
+                                u.get(1),
+                                v.get(1),
+                                weight
+                            )
+                        )
+                    );
+
+                    outputBag.add(
+                        tf.newTupleNoCopy(
+                            ImmutableList.of(
+                                v.get(1),
+                                u.get(1),
+                                weight
                             )
                         )
                     );
@@ -66,6 +80,10 @@ public class UIScores_To_IITerms_Helper extends EvalFunc<DataBag> {
                 j++;
             }
             i++;
+            
+            if (reporter != null) {
+                reporter.progress();
+            }
         }
 
         return outputBag;
