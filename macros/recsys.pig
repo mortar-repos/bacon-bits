@@ -179,7 +179,8 @@ RETURNS ii_links_bayes {
                             item_A AS item_A,
                             item_B AS item_B,
                             (float) (weight / (score + $prior))
-                            AS weight;
+                            AS weight,
+                            weight AS raw_weight;
 };
 
 ----------------------------------------------------------------------------------------------------
@@ -214,7 +215,9 @@ RETURNS ii_links_bayes {
  * initial_nhood_size: int
  * itermed_nhood_size: int
  * -->
- * item_nhoods: {item_A: int, item_B: int, weight: float, steps: int, rank: int}
+ * item_nhoods: {item_A: int, item_B: int, weight: float,
+ *               steps: int, raw_direct_weight: float, raw_indirect_weight: float,
+ *               rank: int}
  */
 DEFINE Recsys__IILinksShortestPathsTwoSteps(ii_links,
                                             initial_nhood_size,
@@ -246,7 +249,9 @@ RETURNS item_nhoods {
  * intermediate_nhood_size: int
  * final_nhood_size: int
  * -->
- * ii_nhoods: {item_A: int, item_B: int, weight: float, steps: int, rank: int}
+ * item_nhoods: {item_A: int, item_B: int, weight: float,
+ *               steps: int, raw_direct_weight: float, raw_indirect_weight: float,
+ *               rank: int}
  */
 DEFINE Recsys__IILinksShortestPathsThreeSteps(ii_links,
                                               initial_nhood_size,
@@ -274,63 +279,67 @@ RETURNS item_nhoods {
 
 
 /*
- * ii_links: {item_A: int, item_B: int, weight: float}
+ * ii_links: {item_A: int, item_B: int, weight: float, raw_weight: float}
  * neighborhood_size: int
  * -->
- * graph: {item_A: int, item_B: int, dist: float}
- * paths: {item_A: int, item_B: int, dist: float}
+ * graph: {item_A: int, item_B: int, dist: float, steps: int, raw_weight: float}
+ * paths: {item_A: int, item_B: int, dist: float, raw_weight: float}
  */
 DEFINE Recsys__InitShortestPaths(ii_links, neighborhood_size)
 RETURNS graph, paths {
     distance_mat        =   FOREACH $ii_links GENERATE
-                                item_A, item_B, 1.0f / weight AS dist;
+                                item_A, item_B, 1.0f / weight AS dist, raw_weight;
 
     $graph              =   FOREACH (GROUP distance_mat BY item_A) {
                                 sorted = ORDER $1 BY dist ASC;
                                    top = LIMIT sorted $neighborhood_size;
                                 GENERATE FLATTEN(top)
-                                      AS (item_A, item_B, dist),
+                                      AS (item_A, item_B, dist, raw_weight),
                                     1 AS steps: int;
                             }
 
-    graph_copy          =   FOREACH $graph GENERATE item_A, item_B, dist;
+    graph_copy          =   FOREACH $graph GENERATE item_A, item_B, dist, raw_weight;
     dest_verts_dup      =   FOREACH graph_copy GENERATE item_B AS id;
     dest_verts          =   DISTINCT dest_verts_dup;
     self_loops          =   FOREACH dest_verts GENERATE
-                                id AS item_A, id AS item_B, 0.0f AS dist;
+                                id AS item_A, id AS item_B, 0.0f AS dist, null AS raw_weight;
     $paths              =   UNION graph_copy, self_loops;
 };
 
 /*
- * ii_links: {item_A: int, item_B: int, weight: float}
+ * ii_links: {item_A: int, item_B: int, weight: float, raw_weight: float}
  * source_items: {item: int}
  * neighborhood_size: int
  * -->
- * graph: {item_A: int, item_B: int, dist: float}
- * paths: {item_A: int, item_B: int, dist: float}
+ * graph: {item_A: int, item_B: int, dist: float, steps: int, raw_weight: float}
+ * paths: {item_A: int, item_B: int, dist: float, raw_weight: float}
  */
 DEFINE Recsys__InitShortestPaths_FromSourceItems(ii_links,
                                                  source_items,
                                                  neighborhood_size)
 RETURNS graph, paths {
     distance_mat        =   FOREACH $ii_links GENERATE
-                                item_A, item_B, 1.0f / weight AS dist;
+                                item_A, item_B, 1.0f / weight AS dist, raw_weight;
 
     graph_tmp           =   FOREACH (GROUP distance_mat BY item_A) {
                                 sorted = ORDER $1 BY dist ASC;
                                    top = LIMIT sorted $neighborhood_size;
                                 GENERATE FLATTEN(top)
-                                      AS (item_A, item_B, dist);
+                                      AS (item_A, item_B, dist, raw_weight);
                             }
 
     $graph              =   FOREACH (JOIN source_items BY item, graph_tmp BY item_A) GENERATE
-                                item_A AS item_A, item_B AS item_B, dist AS dist, 1 AS steps: int;
+                                    item_A AS item_A,
+                                    item_B AS item_B,
+                                      dist AS dist,
+                                         1 AS steps: int,
+                                raw_weight AS raw_weight;
 
     graph_copy          =   FOREACH graph_tmp GENERATE item_A, item_B, dist;
     dest_verts_dup      =   FOREACH graph_copy GENERATE item_B AS id;
     dest_verts          =   DISTINCT dest_verts_dup;
     self_loops          =   FOREACH dest_verts GENERATE
-                                id AS item_A, id AS item_B, 0.0f AS dist;
+                                id AS item_A, id AS item_B, 0.0f AS dist, null AS raw_weight;
     $paths              =   UNION graph_copy, self_loops;
 };
 
@@ -340,7 +349,8 @@ RETURNS graph, paths {
  * intermediate_nhood_size: int
  * final_nhood_size: int
  * -->
- * shortest_paths: {item_A: int, item_B: int, dist: float, steps: int}
+ * shortest_paths: {item_A: int, item_B: int, dist: float,
+ *                  steps: int, raw_direct_weight, raw_indirect_weight}
  */
 DEFINE Recsys__RunShortestPaths_TwoSteps(graph,
                                          paths,
@@ -350,12 +360,18 @@ RETURNS shortest_paths {
                                 $graph::item_A AS item_A,
                                 $paths::item_B AS item_B,
                                 $graph::dist + $paths::dist AS dist,
-                                ($paths::item_A == $paths::item_B ? 1 : 2) AS steps;
+                                ($paths::item_A == $paths::item_B ? 1 : 2)  AS steps,
+                                ($paths::item_A == $paths::item_B ?
+                                    graph::raw_weight : $paths::raw_weight) AS raw_weight,
+                                ($paths::item_A == $paths::item_B ? 1 : 0) AS self_loop_flag;
 
     $shortest_paths     =   FOREACH (GROUP two_step_terms BY (item_A, item_B)) GENERATE
                                            FLATTEN(group) AS (item_A, item_B),
                                      (float) MIN($1.dist) AS dist,
-                                            MIN($1.steps) AS steps;
+                                            MIN($1.steps) AS steps,
+                                    FLATTEN(recsys_udfs.path_info(
+                                        $1.(raw_weight, self_loop_flag)
+                                    )) AS (raw_direct_weight, raw_indirect_weight);
 };
 
 /*
@@ -364,7 +380,8 @@ RETURNS shortest_paths {
  * intermediate_nhood_size: int
  * final_nhood_size: int
  * -->
- * item_nhoods: {item_A: int, item_B: int, dist: float, steps: int}
+ * item_nhoods: {item_A: int, item_B: int, dist: float,
+ *               steps: int, raw_direct_weight, raw_indirect_weight}
  */
 DEFINE Recsys__RunShortestPaths_ThreeSteps(graph,
                                            paths,
@@ -375,18 +392,25 @@ RETURNS shortest_paths {
                                 $graph::item_A AS item_A,
                                 $paths::item_B AS item_B,
                                 $graph::dist + $paths::dist AS dist,
-                                ($paths::item_A == $paths::item_B ? 1 : 2) AS steps;
+                                ($paths::item_A == $paths::item_B ? 1 : 2)  AS steps,
+                                ($paths::item_A == $paths::item_B ?
+                                    graph::raw_weight : $paths::raw_weight) AS raw_weight,
+                                ($paths::item_A == $paths::item_B ? 1 : 0) AS self_loop_flag;
 
     two_steps_out       =   FOREACH (GROUP two_step_terms BY (item_A, item_B)) GENERATE
                                       FLATTEN(group) AS (item_A, item_B),
                                 (float) MIN($1.dist) AS dist,
-                                       MIN($1.steps) AS steps;
+                                       MIN($1.steps) AS steps,
+                                FLATTEN(recsys_udfs.path_info(
+                                    $1.(raw_weight, self_loop_flag)
+                                )) AS (raw_direct_weight, raw_indirect_weight);
 
     two_steps_trim      =   FOREACH (GROUP two_steps_out BY item_A) {
                                 sorted = ORDER $1 BY dist ASC;
                                    top = LIMIT sorted $intermediate_nhood_size;
                                 GENERATE FLATTEN(top)
-                                      AS (item_A, item_B, dist, steps);
+                                      AS (item_A, item_B, dist,
+                                          steps, raw_direct_weight, raw_indirect_weight);
                             }
 
     three_step_terms    =   FOREACH (JOIN two_steps_trim BY item_B, $paths BY item_A) GENERATE
@@ -395,12 +419,18 @@ RETURNS shortest_paths {
                                 two_steps_trim::dist + $paths::dist AS dist,
                                 ($paths::item_A == $paths::item_B ?
                                  two_steps_trim::steps :
-                                 two_steps_trim::steps + 1) AS steps;
+                                 two_steps_trim::steps + 1) AS steps,
+                                ($paths::item_A == $paths::item_B ?
+                                    graph::raw_weight : $paths::raw_weight) AS raw_weight,
+                                ($paths::item_A == $paths::item_B ? 1 : 0) AS self_loop_flag;
 
     $shortest_paths     =   FOREACH (GROUP three_step_terms BY (item_A, item_B)) GENERATE
                                              FLATTEN(group) AS (item_A, item_B),
                                        (float) MIN($1.dist) AS dist,
-                                              MIN($1.steps) AS steps;
+                                              MIN($1.steps) AS steps,
+                                    FLATTEN(recsys_udfs.path_info(
+                                        $1.(raw_weight, self_loop_flag)
+                                    )) AS (raw_direct_weight, raw_indirect_weight);
 };
 
 /*
@@ -457,10 +487,13 @@ RETURNS item_nhoods {
 };
 
 /*
- * shortest_paths: { item_A: int, item_B: int, dist: float, steps: int }
+ * shortest_paths: { item_A: int, item_B: int, dist: float,
+ *                   steps: int, raw_direct_weight, raw_indirect_weight }
  * neighborhood_size: int
  * -->
- * item_nhoods: { item_A: int item_B: int, weight: float, steps: int, rank: int }
+ * item_nhoods: { item_A: int item_B: int, weight: float,
+ *                steps: int, raw_direct_weight, raw_indirect_weight,
+ *                rank: int }
  */
 DEFINE Recsys__PostprocessShortestPaths(shortest_paths, neighborhood_size)
 RETURNS item_nhoods {
@@ -470,11 +503,15 @@ RETURNS item_nhoods {
                                 ordered = ORDER $1 BY dist ASC;
                                     top = LIMIT ordered $neighborhood_size;
                                 GENERATE FLATTEN(Recsys__Enumerate(top))
-                                      AS (item_A, item_B, dist, steps, rank);
+                                      AS (item_A, item_B, dist,
+                                          steps, raw_direct_weight, raw_indirect_weight,
+                                          rank);
                             }
 
     $item_nhoods        =   FOREACH nhoods_tmp GENERATE
-                                item_A, item_B, 1.0f / dist AS weight, steps, rank;
+                                item_A, item_B, 1.0f / dist AS weight,
+                                steps, raw_direct_weight, raw_indirect_weight,
+                                rank;
 };
 
 ----------------------------------------------------------------------------------------------------
