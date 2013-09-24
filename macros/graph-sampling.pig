@@ -16,15 +16,37 @@
  * candidates: { u } or { v } depending on pivot.
  */
 define GraphSampling__BiGraphSeedCandidates(bipartite_graph, pivot, min_degree, max_degree, max_results) returns candidates {
-    degree_dist = GraphSampling__BiGraphDegreeDistribution($bipartite_graph, $pivot);
-    nodes       = foreach (filter degree_dist by degree >= $min_degree and degree < $max_degree) generate node;
+    with_weight = foreach $bipartite_graph generate $pivot as node, 1.0f as weight;        
+    degree_dist = GraphSampling__BiGraphWeightedDegreeDistribution(with_weight, node);
+    nodes       = foreach (filter degree_dist by weight >= $min_degree and weight < $max_degree) generate node;
     $candidates = limit nodes $max_results;
 };
 
-define GraphSampling__BiGraphDegreeDistribution(bipartite_graph, pivot) returns degree_dist {
+/*
+ * Given a bipartite graph returns several candidate nodes to be used
+ * as seeds in sampling. Uses the weighted degree distribution to do this and
+ * relies on the user to choose appropriate weight range.
+ *          
+ * bipartite_graph: { u, v, w }  A bipartite graph specified as edges
+ *                               from nodes u in U to nodes v in V with
+ *                               weight w.
+ * pivot                         Which set U or V (0 or 1) to pull from.
+ * min_weight: float 
+ * max_weight: float
+ * max_results: int        
+ * ==>
+ * candidates: { u } or { v } depending on pivot.
+ */
+define GraphSampling__BiGraphWeightedSeedCandidates(bipartite_graph, pivot, min_weight, max_weight, max_results) returns candidates {        
+    degree_dist = GraphSampling__BiGraphWeightedDegreeDistribution($bipartite_graph, $pivot);
+    nodes       = foreach (filter degree_dist by weight >= $min_weight and degree < $max_weight) generate node;
+    $candidates = limit nodes $max_results;
+};
+
+define GraphSampling__BiGraphWeightedDegreeDistribution(bipartite_graph, pivot) returns degree_dist {
   $degree_dist = foreach (group $bipartite_graph by $pivot) generate
-                   group                   as node,
-                   COUNT($bipartite_graph) as degree;                
+                   group                        as node,
+                   SUM($bipartite_graph.weight) as weight;                
 };
 
 /*
