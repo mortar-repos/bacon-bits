@@ -9,11 +9,11 @@ REGISTER 'lucene-analyzers-common-4.4.0.jar';
 DEFINE NLP__EnumerateFromOne           datafu.pig.bags.Enumerate('1');
 
 DEFINE NLP__HTMLToText                 com.mortardata.pig.nlp.HTMLToText();
-DEFINE NLP__TextToWordFrequencies      com.mortardata.pig.nlp.TextToWordFrequencies('$NLP__MIN_WORD_LENGTH');
-Define NLP__InverseDocumentFrequencies com.mortardata.pig.nlp.InverseDocumentFrequencies();
+--DEFINE NLP__TextToWordFrequencies      com.mortardata.pig.nlp.TextToWordFrequencies('$NLP__MIN_WORD_LENGTH');
+--Define NLP__InverseDocumentFrequencies com.mortardata.pig.nlp.InverseDocumentFrequencies();
 
 DEFINE NLP__ElementwiseProduct         com.mortardata.pig.collections.ElementwiseProduct();
-DEFINE NLP__TopN                       com.mortardata.pig.collections.TopN('$NLP__TFIDF_NUM_FEATURES');
+--DEFINE NLP__TopN                       com.mortardata.pig.collections.TopN('$NLP__TFIDF_NUM_FEATURES');
 DEFINE NLP__FromPigCollectionToBag     com.mortardata.pig.collections.FromPigCollectionToBag();
 
 ----------------------------------------------------------------------------------------------------
@@ -104,14 +104,14 @@ define NLP__TFIDF(documents, minWordSize, minGramSize, maxGramSize, maxFeatures)
   term_freqs = foreach (group tokenized by (id, token)) generate
                  flatten(group)   as (id, token),
                  COUNT(tokenized) as term_freq;
-
+  
   --
   -- Now, compute the 'augmented' frequency to prevent bias toward long docs
   --
   max_term_freqs = foreach (group term_freqs by id) generate
                      flatten(term_freqs)       as (id, token, term_freq),
                      MAX(term_freqs.term_freq) as max_term_freq;
-
+  
   aug_term_freqs = foreach max_term_freqs {
                      -- see: http://www.cs.odu.edu/~jbollen/IR04/readings/article1-29-03.pdf
                      aug_freq = 0.5f + (0.5f * term_freq)/max_term_freq;
