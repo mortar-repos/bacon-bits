@@ -35,17 +35,36 @@ public class TimeSeriesItemLinker extends EvalFunc<DataBag> implements Accumulat
         this.windowSize = Integer.parseInt(windowSize);
     }
 
+    /**
+       Given a tuple schema, appends scope to each field alias
+     */
+    public List<Schema.FieldSchema> appendScope(String scope, Schema s) throws FrontendException {
+        List<Schema.FieldSchema> fields = s.getFields();
+        List<Schema.FieldSchema> resultFields = new ArrayList<Schema.FieldSchema>(fields.size());
+        for (int i = 0; i < fields.size(); i++) {
+            Schema.FieldSchema resultField = new Schema.FieldSchema(fields.get(i));
+            resultField.alias = scope + "::" + resultField.alias;
+            resultFields.add(resultField);
+        }
+        return resultFields;            
+    }
+    
     public Schema outputSchema(Schema input) {
         try {
-            List<Schema.FieldSchema> outputTupleFields = new ArrayList<Schema.FieldSchema>();
-            outputTupleFields.add(new Schema.FieldSchema("item_A", DataType.CHARARRAY));
-            outputTupleFields.add(new Schema.FieldSchema("item_B", DataType.CHARARRAY));
-            
-            return new Schema(new Schema.FieldSchema(
-                "item_links", new Schema(new Schema.FieldSchema(
-                    null, new Schema(outputTupleFields), DataType.TUPLE
-                )), DataType.BAG
-            ));
+
+            Schema bagTupleSchema = input.getField(0).schema;
+            Schema tupleSchema = bagTupleSchema.getField(0).schema;
+
+            // Now attach prefixes
+            List<Schema.FieldSchema> first = appendScope("first", tupleSchema);
+            List<Schema.FieldSchema> second = appendScope("second", tupleSchema);
+            for (Schema.FieldSchema sec : second) {
+                first.add(sec);
+            }
+            Schema merged = new Schema(new Schema.FieldSchema(null, new Schema(first), DataType.TUPLE));
+            Schema.FieldSchema outputBagSchema = new Schema.FieldSchema("item_links", merged, DataType.BAG);
+
+            return new Schema(outputBagSchema);
         } catch (FrontendException e) {
             throw new RuntimeException(e);
         }
@@ -62,15 +81,8 @@ public class TimeSeriesItemLinker extends EvalFunc<DataBag> implements Accumulat
 
         for (Tuple u : bag) {
             for (Tuple v : window) {
-                Tuple w = tf.newTuple(2);
-                w.set(0, u.get(0));
-                w.set(1, v.get(0));
-                output.add(w);
-
-                w = tf.newTuple(2);
-                w.set(0, v.get(0));
-                w.set(1, u.get(0));
-                output.add(w);
+                output.add(unionTuples(u,v));
+                output.add(unionTuples(v,u));
             }
 
             window.addLast(u);
@@ -80,6 +92,24 @@ public class TimeSeriesItemLinker extends EvalFunc<DataBag> implements Accumulat
         }
     }
 
+    /**
+       Creates a new tuple containing all the fields from
+       both x and y in order
+     */
+    public Tuple unionTuples(Tuple x, Tuple y) throws IOException {
+        Tuple result = tf.newTuple(x.size() + y.size());
+        int i = 0;
+        for (; i < x.size(); i++) {
+            result.set(i, x.get(i));
+        }
+
+        for (int j = 0; j < y.size(); j++,i++) {
+            result.set(i, y.get(j));
+        }
+        
+        return result;
+    }
+    
     public void cleanup() {
         window = new ArrayDeque<Tuple>();
         output = bf.newDefaultBag();
