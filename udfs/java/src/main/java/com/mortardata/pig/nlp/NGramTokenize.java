@@ -28,10 +28,12 @@ public class NGramTokenize extends EvalFunc<DataBag>{
     private static BagFactory bagFactory = BagFactory.getInstance();
     private static String NOFIELD = "";
     private static Pattern SHINGLE_FILLER = Pattern.compile(".* _ .*|_ .*|.* _| _");
-    private StandardAnalyzer analyzer;
+    private static StandardAnalyzer analyzer;
+    
     private Integer minWordSize;
     private Integer minGramSize;
     private Integer maxGramSize;
+    private Boolean outputUnigrams;
     
     public NGramTokenize(String minGramSize, String maxGramSize) {
         this(minGramSize, maxGramSize, "3");
@@ -42,6 +44,15 @@ public class NGramTokenize extends EvalFunc<DataBag>{
         this.minGramSize = Integer.parseInt(minGramSize);
         this.maxGramSize = Integer.parseInt(maxGramSize);
         this.analyzer = new StandardAnalyzer(Version.LUCENE_44);
+        validateSizes();
+    }
+
+    public void validateSizes() {
+        outputUnigrams = false;
+        if (minGramSize == 1 && maxGramSize > 1) {
+            minGramSize = 2;
+            outputUnigrams = true;
+        }
     }
     
     /**
@@ -54,24 +65,20 @@ public class NGramTokenize extends EvalFunc<DataBag>{
     public DataBag exec(Tuple input) throws IOException {
         if (input == null || input.size() < 1 || input.isNull(0))
             return null;
-
-        StringReader textInput = new StringReader(input.get(0).toString());
-        TokenStream stream = analyzer.tokenStream(NOFIELD, textInput);
+        
+        TokenStream stream = analyzer.tokenStream(NOFIELD, input.get(0).toString());
         LengthFilter filtered = new LengthFilter(Version.LUCENE_44, stream, minWordSize, Integer.MAX_VALUE); // Let words be long
-                
+
+        DataBag result;
         if (minGramSize == 1 && maxGramSize == 1) {
-            return fillBag(filtered);
+            result = fillBag(filtered);
         } else {
-            Boolean outputUnigrams = false;
-            if (minGramSize == 1) {
-                minGramSize = 2;
-                outputUnigrams = true;
-            }
             ShingleFilter nGramStream = new ShingleFilter(filtered, minGramSize, maxGramSize);        
             nGramStream.setOutputUnigrams(outputUnigrams);                
             PatternReplaceFilter replacer = new PatternReplaceFilter(nGramStream, SHINGLE_FILLER, NOFIELD, true);
-            return fillBag(replacer);
-        } 
+            result = fillBag(replacer);
+        }
+        return result;
     }
 
     /**
@@ -79,15 +86,18 @@ public class NGramTokenize extends EvalFunc<DataBag>{
      */
     public DataBag fillBag(TokenStream stream) throws IOException {
         DataBag result = bagFactory.newDefaultBag();
-        CharTermAttribute termAttribute = stream.getAttribute(CharTermAttribute.class);
-        stream.reset();
-
-        while (stream.incrementToken()) {
-            if (termAttribute.length() > 0) {
-                Tuple termText = tupleFactory.newTuple(termAttribute.toString());
-                result.add(termText);
+        CharTermAttribute termAttribute = stream.addAttribute(CharTermAttribute.class);
+        try {
+            stream.reset();
+            while (stream.incrementToken()) {
+                if (termAttribute.length() > 0) {
+                    Tuple termText = tupleFactory.newTuple(termAttribute.toString());
+                    result.add(termText);
+                }
             }
-            termAttribute.setEmpty();
+            stream.end();
+        } finally {            
+            stream.close();
         }
         return result;
     }

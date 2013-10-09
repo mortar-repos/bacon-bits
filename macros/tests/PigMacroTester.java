@@ -10,11 +10,14 @@ import java.util.ArrayList;
 import java.lang.reflect.Field;
 
 import org.apache.pig.ExecType;
+import org.apache.pig.data.DataType;
 import org.apache.pig.impl.PigContext;
+import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.apache.pig.pigunit.PigTest;
 import org.apache.pig.pigunit.pig.PigServer;
 import org.apache.pig.tools.parameters.ParseException;
-
+import org.apache.pig.impl.io.FileLocalizer;
+    
 /**
    Mostly necessary as a means of getting around https://issues.apache.org/jira/browse/PIG-3114
  */
@@ -24,6 +27,29 @@ public class PigMacroTester extends PigTest {
         super(script);
     }
 
+    // Don't kill me.
+    public PigServer getPig() {
+        try {
+            Field staticPigServerField = null;
+            for (Field field : PigTest.class.getDeclaredFields()) {
+                if (PigServer.class.isAssignableFrom(field.getType())) {
+                    staticPigServerField = field;
+                    break;
+                }
+            }
+            
+            if (staticPigServerField!=null) {
+                staticPigServerField.setAccessible(true);
+                return (PigServer)staticPigServerField.get(null);
+            } else {
+                System.out.println("No matching static PigServer field found to patch.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
     // Don't kill me.
     public void resetPig() {
         try {
@@ -66,4 +92,19 @@ public class PigMacroTester extends PigTest {
         bufferedReader.close();
         return lines;
     }
+
+    /**
+       Bag schemas aren't serialized properly, workaround
+     */
+    public void assertOutput(String aliasInput, String[] input, String alias, String[] expected, String inputSchema)
+        throws IOException, ParseException {
+        registerScript();
+
+        final String destination = FileLocalizer.getTemporaryPath(getPig().getPigContext()).toString();
+        getCluster().copyFromLocalFile(input, destination, true);
+        override(aliasInput,
+                 String.format("%s = LOAD '%s' AS %s;", aliasInput, destination, inputSchema));
+
+        assertOutput(alias, expected);
+  }
 }
