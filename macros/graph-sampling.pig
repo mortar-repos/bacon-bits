@@ -39,7 +39,7 @@ define GraphSampling__BiGraphSeedCandidates(bipartite_graph, pivot, min_degree, 
  */
 define GraphSampling__BiGraphWeightedSeedCandidates(bipartite_graph, pivot, min_weight, max_weight, max_results) returns candidates {        
     degree_dist = GraphSampling__BiGraphWeightedDegreeDistribution($bipartite_graph, $pivot);
-    nodes       = foreach (filter degree_dist by weight >= $min_weight and degree < $max_weight) generate node;
+    nodes       = foreach (filter degree_dist by weight >= $min_weight and weight < $max_weight) generate node;
     $candidates = limit nodes $max_results;
 };
 
