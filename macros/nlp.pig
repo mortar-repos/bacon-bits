@@ -148,3 +148,53 @@ define NLP__TFIDF(documents, minWordSize, minGramSize, maxGramSize, maxFeatures)
                  top_N.(token,weight) as features;
              };
 };
+
+/*
+ * Given a set of documents and their associated tfidf feature vectors, returns the document-document
+ * pairs and their cosine similarities. Only document-document pairs with a non-zero weight are returned.        
+ *
+ * feature_vectors:   { id, features:{(token:chararray,tfidf_weight:float)} }
+ * ==>
+ * graph: { idA, idB, cosine_simiarity:float }
+ */
+define NLP__CosineSimilarity(feature_vectors) returns graph {
+
+  --
+  -- Normalize the vectors
+  --
+  vectors = foreach $feature_vectors generate $0 as id, $1 as features:bag{t:tuple(token:chararray, weight:float)};
+  vectors = foreach vectors {
+              squares        = foreach features generate weight*weight as weight_squared;
+              squares_summed = SUM(squares.weight_squared);
+              magnitude      = SQRT(squares_summed);
+              generate
+                id                as id,
+                flatten(features) as (token,weight),
+                magnitude         as magnitude;
+            };
+  
+  normalizedA = foreach vectors generate id as id, token as token, weight/magnitude as weight;
+  normalizedB = foreach normalizedA generate id as id, token as token, weight as weight; -- again, for self join
+  
+  --
+  -- Get pairs of documents that have at least one token in common
+  --
+  intersect = cogroup normalizedA by token, normalizedB by token;
+  intersect = foreach (filter intersect by not IsEmpty(normalizedA) and not IsEmpty(normalizedB)) {
+                pairs = cross normalizedA.(id,weight), normalizedB.(id,weight);
+                pairs = filter pairs by $0 != $2; -- don't consider self-loops
+                dots  = foreach pairs generate $0 as idA, $2 as idB, $1*$3 as product;
+                generate
+                  flatten(dots) as (idA, idB, product);
+              };
+  
+   --
+   -- Compute similarity scores
+   --
+   $graph = foreach (group intersect by (idA, idB)) {
+              sim = SUM(intersect.product);
+              generate
+                flatten(group) as (idA, idB),
+                sim            as cosine_similarity;
+            };
+};
